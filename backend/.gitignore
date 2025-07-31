@@ -1,0 +1,21 @@
+# Ignore model files
+/models/*
+!/models/.gitkeep  # ເພື່ອຮັກສາໂຟນເດີ models ໄວ້ເຖິງຈະວ່າງ
+
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+#.env
+
+# IDE specific files
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db

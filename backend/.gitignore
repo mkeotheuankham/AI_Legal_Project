@@ -9,6 +9,11 @@ venv/
 __pycache__/
 *.py[cod]
 
+db_vector/
+# Database files
+*.sqlite3
+models/
+
 # Environment variables
 #.env
 

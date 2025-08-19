@@ -1,0 +1,49 @@
+ພາກທີ 1: ວິທີຣັນໂຄງການ (How to Run the Project)
+ທ່ານຕ້ອງເປີດ Terminal (ຫຼື Command Prompt) ຂຶ້ນມາ 2 ໜ້າຈໍ, ໜຶ່ງສຳລັບ Backend ແລະ ໜຶ່ງສຳລັບ Frontend.
+
+A. ການຣັນ Backend (FastAPI Server)
+ເປີດ Terminal ທີ 1 ແລະ ເຂົ້າໄປທີ່ໂຟເດີ backend:
+
+Bash
+
+cd path/to/your/project/backend
+ສ້າງສະພາບແວດລ້ອມສະເໝືອນ (Virtual Environment): (ແນະນຳໃຫ້ເຮັດເພື່ອບໍ່ໃຫ້ library ຕຳກັນ)
+
+Bash
+
+python -m venv venv
+ເປີດໃຊ້ງານ Virtual Environment:
+
+Windows: venv\Scripts\activate
+
+Mac/Linux: source venv/bin/activate
+
+ຕິດຕັ້ງ Library ທີ່ຈຳເປັນ:
+
+Bash
+
+pip install -r requirements.txt
+ຣັນເຊີບເວີ FastAPI:
+
+Bash
+
+uvicorn app.main:app --reload
+ຖ້າບໍ່ມີຫຍັງຜິດພາດ, ທ່ານຈະເຫັນຂໍ້ຄວາມບອກວ່າເຊີບເວີກຳລັງເຮັດວຽກຢູ່ http://127.0.0.1:8000.
+
+B. ການຣັນ Frontend (React App)
+ເປີດ Terminal ທີ 2 ແລະ ເຂົ້າໄປທີ່ໂຟເດີ frontend:
+
+Bash
+
+cd path/to/your/project/frontend
+ຕິດຕັ້ງ Dependencies ຂອງ Node.js:
+
+Bash
+
+npm install
+ຣັນ Development Server ຂອງ React:
+
+Bash
+
+npm run dev
+Terminal ຈະສະແດງ URL ໃຫ້ທ່ານ, ໂດຍທົ່ວໄປແມ່ນ http://localhost:5173/. ໃຫ້ທ່ານເປີດ URL ນີ້ໃນ Browser ເພື່ອເບິ່ງໜ້າເວັບ.

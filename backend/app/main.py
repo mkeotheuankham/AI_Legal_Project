@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
-from dotenv import load_dotenv # **ເພີ່ມ:** ສຳລັບອ່ານ .env
+from dotenv import load_dotenv
 
 from . import models, schemas
 from .database import SessionLocal, engine
@@ -14,14 +14,14 @@ from .database import SessionLocal, engine
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 
-# **ເພີ່ມ:** ໂຫຼດ API Key ຈາກໄຟລ໌ .env
+# **ສຳຄັນ:** ໂຫຼດ API Key ຈາກໄຟລ໌ .env
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- Configuration ---
 PERSIST_DIRECTORY = "db_vector"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-# **ແກ້ໄຂ:** ເພີ່ມ API Key ເຂົ້າໄປໃນ URL
+# ໃຊ້ Gemini API URL ພ້ອມ API Key
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={GEMINI_API_KEY}"
 
 # --- ໂຫຼດ AI Model ແລະ Database ຕຽມໄວ້ ---
@@ -65,13 +65,16 @@ async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(g
         relevant_docs = retriever.invoke(request.question)
         context = "\n\n".join([doc.page_content for doc in relevant_docs])
         
+        source_files = [os.path.basename(doc.metadata.get('source', 'N/A')) for doc in relevant_docs]
+        unique_sources = sorted(list(set(source_files)))
+
         # 2. ສ້າງ Prompt ສຳລັບ Gemini
         prompt = f"""
         ທ່ານເປັນຜູ້ຊ່ວຍ AI ດ້ານກົດໝາຍລາວທີ່ຊ່ຽວຊານ. 
         ໃຫ້ຕອບຄຳຖາມຕໍ່ໄປນີ້ເປັນພາສາລາວທີ່ຊັດເຈນ, ກະທັດຮັດ ແລະ ເຂົ້າໃຈງ່າຍ.
         ຄຳຕອບຕ້ອງອີງໃສ່ຂໍ້ມູນຈາກ "ຂໍ້ມູນອ້າງອີງ" ທີ່ໃຫ້ມາເທົ່ານັ້ນ.
+        ໃຫ້ໃຊ້ Markdown formatting ເພື່ອເຮັດໃຫ້ຄຳຕອບອ່ານງ່າຍ (ເຊັ່ນ: ໃຊ້ `*` ສຳລັບ bullet points, `**ຄຳ**` ສຳລັບໂຕໜາ).
         ຖ້າຂໍ້ມູນບໍ່ພຽງພໍທີ່ຈະຕອບຄຳຖາມໄດ້, ໃຫ້ຕອບວ່າ "ຂໍອະໄພ, ຂ້າພະເຈົ້າບໍ່ສາມາດຊອກຫາຂໍ້ມູນທີ່ກ່ຽວຂ້ອງກັບຄຳຖາມນີ້ໃນຖານຂໍ້ມູນໄດ້."
-        ຫ້າມຄິດຄຳຕອບເອງເດັດຂາດ.
 
         ---
         ຂໍ້ມູນອ້າງອີງ:
@@ -80,30 +83,28 @@ async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(g
 
         ຄຳຖາມ: {request.question}
 
-        ຄຳຕອບທີ່ເປັນປະໂຫຍດ:
+        ຄຳຕອບທີ່ເປັນປະໂຫຍດ (ໃນຮູບແບບ Markdown):
         """
 
         # 3. ສົ່ງ Request ໄປຫາ Gemini API
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(GEMINI_API_URL, json=payload)
             response.raise_for_status()
-            
             result = response.json()
             
-            # 4. ສະກັດເອົາຄຳຕອບຈາກ Gemini
-            if (result.get('candidates') and 
-                result['candidates'][0].get('content') and 
-                result['candidates'][0]['content'].get('parts')):
+            if (result.get('candidates') and result['candidates'][0].get('content')):
                 answer = result['candidates'][0]['content']['parts'][0]['text']
             else:
                 answer = "ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດໃນການສ້າງຄຳຕອບຈາກ AI."
 
-        # 5. ບັນທຶກລົງຖານຂໍ້ມູນ
-        db_qa = models.QAHistory(question=request.question, answer=answer)
+        # 4. ບັນທຶກລົງຖານຂໍ້ມູນ
+        db_qa = models.QAHistory(
+            question=request.question, 
+            answer=answer,
+            sources=unique_sources
+        )
         db.add(db_qa)
         db.commit()
         db.refresh(db_qa)

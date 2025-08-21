@@ -1,11 +1,18 @@
 // src/pages/ChatPage.tsx
-import { useState, useEffect, useRef, type ReactElement } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type ReactElement,
+  Fragment,
+} from "react";
 import { Box, Container, Typography, Alert } from "@mui/material";
 import ChatBubble from "../components/ChatBubble";
 import InputBar from "../components/InputBar";
-import { fetchHistory, sendQuestion } from "../utils/api";
+// **ແກ້ໄຂ:** ປ່ຽນທີ່ຢູ່ຂອງການ import ໃຫ້ຖືກຕ້ອງ
+import DateSeparator from "../components/DateSeparator";
+import { fetchHistory, streamQuestion } from "../utils/api";
 
-// **ແກ້ໄຂ:** ເພີ່ມ sources ເຂົ້າໄປໃນ Interface
 interface Message {
   id: number | string;
   sender: "user" | "ai";
@@ -13,6 +20,14 @@ interface Message {
   timestamp?: string;
   sources?: string[] | null;
 }
+
+const isSameDay = (d1: Date, d2: Date) => {
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+};
 
 export default function ChatPage(): ReactElement {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -26,7 +41,7 @@ export default function ChatPage(): ReactElement {
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -46,7 +61,7 @@ export default function ChatPage(): ReactElement {
             sender: "ai",
             text: item.answer,
             timestamp: item.timestamp,
-            sources: item.sources, // **ເພີ່ມ:** ໂຫຼດ sources ຈາກ history
+            sources: item.sources,
           });
         });
         setMessages(formattedMessages);
@@ -60,36 +75,55 @@ export default function ChatPage(): ReactElement {
 
   const handleSendQuestion = async (question: string) => {
     setError(null);
+    setIsLoading(true);
+
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       sender: "user",
       text: question,
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
+    const aiMessagePlaceholder: Message = {
+      id: `ai-${Date.now()}`,
+      sender: "ai",
+      text: "",
+      sources: [],
+    };
 
-    try {
-      const response = await sendQuestion(question);
+    setMessages((prev) => [...prev, userMessage, aiMessagePlaceholder]);
 
-      const aiMessage: Message = {
-        id: response.id,
-        sender: "ai",
-        text: response.answer,
-        timestamp: response.timestamp,
-        sources: response.sources, // **ເພີ່ມ:** ເກັບ sources ຈາກ response
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (err) {
-      console.error("Error sending question:", err);
-      setError("ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຄຳຖາມ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.");
-    } finally {
-      setIsLoading(false);
-    }
+    await streamQuestion(
+      question,
+      (chunk) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessagePlaceholder.id
+              ? { ...msg, text: msg.text + chunk }
+              : msg
+          )
+        );
+      },
+      (sources) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessagePlaceholder.id
+              ? { ...msg, sources: sources }
+              : msg
+          )
+        );
+      },
+      (errorMsg) => {
+        setError(errorMsg);
+        setMessages((prev) =>
+          prev.filter((msg) => msg.id !== aiMessagePlaceholder.id)
+        );
+      }
+    );
+
+    setIsLoading(false);
   };
 
   return (
-    // ... (ສ່ວນ JSX ຄືເກົ່າ)
     <Container
       maxWidth="md"
       sx={{ py: 4, display: "flex", flexDirection: "column", height: "100vh" }}
@@ -110,23 +144,43 @@ export default function ChatPage(): ReactElement {
 
       <Box
         ref={chatContainerRef}
-        sx={{
-          flexGrow: 1,
-          overflowY: "auto",
-          mb: 2,
-          p: 2,
-          border: "1px solid #ddd",
-          borderRadius: 2,
-        }}
+        sx={{ flexGrow: 1, overflowY: "auto", mb: 2, px: 1 }}
       >
-        {messages.map((msg) => (
-          <ChatBubble key={msg.id} message={msg} />
-        ))}
-        {isLoading && <ChatBubble message={{ sender: "ai", text: "..." }} />}
+        {messages.map((msg, index) => {
+          const currentDate = msg.timestamp
+            ? new Date(msg.timestamp)
+            : new Date();
+          const prevDate =
+            index > 0 && messages[index - 1].timestamp
+              ? new Date(messages[index - 1].timestamp!)
+              : null;
+          const showDateSeparator =
+            !prevDate || !isSameDay(prevDate, currentDate);
+
+          return (
+            <Fragment key={msg.id}>
+              {showDateSeparator && (
+                <DateSeparator date={currentDate.toISOString()} />
+              )}
+              <ChatBubble message={msg} />
+            </Fragment>
+          );
+        })}
       </Box>
 
-      <Box sx={{ mt: "auto" }}>
+      <Box sx={{ mt: "auto", px: { xs: 0, sm: 4 } }}>
         <InputBar onSend={handleSendQuestion} isLoading={isLoading} />
+        <Typography
+          variant="caption"
+          sx={{
+            textAlign: "center",
+            display: "block",
+            mt: 2,
+            color: "text.secondary",
+          }}
+        >
+          AI ອາດຈະຕອບຜິດພາດໄດ້. ກະລຸນາກວດສອບຂໍ້ມູນສຳຄັນ.
+        </Typography>
       </Box>
     </Container>
   );

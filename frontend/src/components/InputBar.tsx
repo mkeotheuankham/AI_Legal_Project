@@ -1,6 +1,6 @@
 // src/components/InputBar.tsx
-import { useState, type KeyboardEvent } from "react"; // ແກ້ໄຂ: ເພີ່ມ 'type' ສຳລັບ KeyboardEvent
-import { TextField, Box, IconButton } from "@mui/material"; // ແກ້ໄຂ: ລຶບ 'Button' ທີ່ບໍ່ໄດ້ໃຊ້ອອກ
+import { useState, type KeyboardEvent } from "react";
+import { TextField, Box, IconButton, CircularProgress } from "@mui/material";
 import { Send } from "@mui/icons-material";
 
 interface InputBarProps {
@@ -26,19 +26,31 @@ export default function InputBar({ onSend, isLoading }: InputBarProps) {
   };
 
   return (
-    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+    <Box
+      sx={{
+        p: 1,
+        bgcolor: "background.paper",
+        borderRadius: "28px",
+        boxShadow: "0 1px 6px 0 rgba(32,33,36,0.28)",
+        display: "flex",
+        alignItems: "center",
+      }}
+    >
       <TextField
         fullWidth
+        multiline
+        maxRows={5}
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="ຖາມຄຳຖາມກ່ຽວກັບກົດໝາຍ..."
         disabled={isLoading}
-        variant="outlined"
+        variant="standard" // ໃຊ້ standard ເພື່ອບໍ່ໃຫ້ມີຂອບ
+        InputProps={{
+          disableUnderline: true,
+        }}
         sx={{
-          "& .MuiOutlinedInput-root": {
-            borderRadius: "20px",
-          },
+          ml: 2,
         }}
       />
       <IconButton
@@ -46,12 +58,12 @@ export default function InputBar({ onSend, isLoading }: InputBarProps) {
         onClick={handleSubmit}
         disabled={isLoading}
         sx={{
-          bgcolor: "primary.main",
+          bgcolor: isLoading ? "transparent" : "primary.main",
           color: "white",
           "&:hover": { bgcolor: "primary.dark" },
         }}
       >
-        <Send />
+        {isLoading ? <CircularProgress size={24} /> : <Send />}
       </IconButton>
     </Box>
   );

@@ -1,7 +1,7 @@
 // src/styles/theme.ts
 import { createTheme } from "@mui/material/styles";
-import "@fontsource/noto-sans-lao/400.css"; // ເພີ່ມ weight 400 (normal)
-import "@fontsource/noto-sans-lao/700.css"; // ເພີ່ມ weight 700 (bold)
+import "@fontsource/noto-sans-lao/400.css";
+import "@fontsource/noto-sans-lao/700.css";
 
 export const theme = createTheme({
   typography: {
@@ -10,47 +10,20 @@ export const theme = createTheme({
     ),
   },
   palette: {
+    mode: "light",
+    background: {
+      default: "#f9f9f9", // ສີພື້ນຫຼັງອ່ອນໆ
+      paper: "#ffffff",
+    },
     primary: {
-      main: "#1976d2",
+      main: "#1a73e8", // ສີຟ້າຂອງ Google
     },
     secondary: {
       main: "#9c27b0",
     },
-  },
-  components: {
-    MuiCssBaseline: {
-      styleOverrides: {
-        "@global": {
-          "@font-face": [
-            {
-              fontFamily: "Noto Sans Lao",
-              fontStyle: "normal",
-              fontDisplay: "swap",
-            },
-          ],
-        },
-      },
+    text: {
+      primary: "#202124", // ສີໂຕໜັງສືເຂັ້ມ
+      secondary: "#5f6368",
     },
   },
 });
-
-// TypeScript declarations
-declare module "@mui/material/styles" {
-  interface Theme {
-    // ປະກອບຄຸນລັກສະນະ theme ເພີ່ມເຕີມຖ້າມີ
-    custom?: {
-      palette?: {
-        customColor?: string;
-      };
-    };
-  }
-
-  interface ThemeOptions {
-    // ປະກອບຕົວເລືອກ theme ເພີ່ມເຕີມ
-    custom?: {
-      palette?: {
-        customColor?: string;
-      };
-    };
-  }
-}

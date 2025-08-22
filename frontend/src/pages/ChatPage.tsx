@@ -9,9 +9,8 @@ import {
 import { Box, Container, Typography, Alert } from "@mui/material";
 import ChatBubble from "../components/ChatBubble";
 import InputBar from "../components/InputBar";
-// **ແກ້ໄຂ:** ປ່ຽນທີ່ຢູ່ຂອງການ import ໃຫ້ຖືກຕ້ອງ
 import DateSeparator from "../components/DateSeparator";
-import { fetchHistory, streamQuestion } from "../utils/api";
+import { fetchHistory } from "../utils/api"; // ບໍ່ຕ້ອງ import sendQuestion ແລ້ວ
 
 interface Message {
   id: number | string;
@@ -73,54 +72,59 @@ export default function ChatPage(): ReactElement {
     loadHistory();
   }, []);
 
+  // Function sendQuestion ສຳລັບ axios
+  const sendQuestion = async (question: string) => {
+    const response = await fetch("http://localhost:8000/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+    return response.json();
+  };
+
   const handleSendQuestion = async (question: string) => {
     setError(null);
-    setIsLoading(true);
-
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       sender: "user",
       text: question,
       timestamp: new Date().toISOString(),
     };
-    const aiMessagePlaceholder: Message = {
-      id: `ai-${Date.now()}`,
-      sender: "ai",
-      text: "",
-      sources: [],
-    };
 
-    setMessages((prev) => [...prev, userMessage, aiMessagePlaceholder]);
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
 
-    await streamQuestion(
-      question,
-      (chunk) => {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === aiMessagePlaceholder.id
-              ? { ...msg, text: msg.text + chunk }
-              : msg
-          )
-        );
-      },
-      (sources) => {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === aiMessagePlaceholder.id
-              ? { ...msg, sources: sources }
-              : msg
-          )
-        );
-      },
-      (errorMsg) => {
-        setError(errorMsg);
-        setMessages((prev) =>
-          prev.filter((msg) => msg.id !== aiMessagePlaceholder.id)
-        );
+    try {
+      const response = await sendQuestion(question);
+
+      // **ຈຸດສຳຄັນ:** ເພີ່ມ console.log ເພື່ອເບິ່ງຂໍ້ມູນທີ່ໄດ້ຮັບ
+      console.log("Data received from backend:", response);
+
+      // ກວດສອບໃຫ້ແນ່ໃຈວ່າ response ມີ field ທີ່ຈຳເປັນຄົບຖ້ວນ
+      if (response && response.id && response.answer) {
+        const aiMessage: Message = {
+          id: response.id,
+          sender: "ai",
+          text: response.answer,
+          timestamp: response.timestamp,
+          sources: response.sources,
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      } else {
+        // ຖ້າຂໍ້ມູນບໍ່ຄົບ, ໃຫ້ສະແດງ Error
+        console.error("Invalid response structure from backend:", response);
+        setError("ໄດ້ຮັບຂໍ້ມູນທີ່ບໍ່ສົມບູນຈາກເຊີບເວີ.");
       }
-    );
-
-    setIsLoading(false);
+    } catch (err) {
+      console.error("Error sending question:", err);
+      setError("ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຄຳຖາມ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.");
+      setMessages((prev) => prev.filter((msg) => msg.id !== userMessage.id));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -166,6 +170,7 @@ export default function ChatPage(): ReactElement {
             </Fragment>
           );
         })}
+        {isLoading && <ChatBubble message={{ sender: "ai", text: "..." }} />}
       </Box>
 
       <Box sx={{ mt: "auto", px: { xs: 0, sm: 4 } }}>

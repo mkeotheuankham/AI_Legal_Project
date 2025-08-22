@@ -9,11 +9,17 @@ export interface MessageRecord {
   sources: string[] | null;
 }
 
+// **ເພີ່ມ:** Interface ສຳລັບປະຫວັດການສົນທະນາ
+interface HistoryMessage {
+  role: "user" | "ai";
+  text: string;
+}
+
 const API_BASE_URL = "http://localhost:8000";
 
-// **ສຳຄັນ:** ສ້າງ Function ໃໝ່ສຳລັບ Streaming
 export const streamQuestion = async (
   question: string,
+  history: HistoryMessage[], // **ເພີ່ມ:** ຮັບ history ເປັນ parameter
   onChunk: (chunk: string) => void,
   onSources: (sources: string[]) => void,
   onError: (error: string) => void
@@ -22,13 +28,15 @@ export const streamQuestion = async (
     const response = await fetch(`${API_BASE_URL}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      // **ເພີ່ມ:** ສົ່ງ history ໄປພ້ອມກັບ question
+      body: JSON.stringify({ question, history }),
     });
 
     if (!response.ok || !response.body) {
       throw new Error(`Server error: ${response.statusText}`);
     }
 
+    // ... (Streaming logic is the same)
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let sourcesSent = false;
@@ -39,7 +47,6 @@ export const streamQuestion = async (
 
       const chunk = decoder.decode(value, { stream: true });
 
-      // ກວດສອບ chunk ທຳອິດເພື່ອເອົາແຫຼ່ງອ້າງອີງ
       if (!sourcesSent && chunk.startsWith("SOURCES:")) {
         try {
           const parts = chunk.split("\n");
@@ -47,7 +54,6 @@ export const streamQuestion = async (
           const sources = JSON.parse(sourcesJson);
           onSources(sources);
           sourcesSent = true;
-          // ສົ່ງສ່ວນທີ່ເຫຼືອຂອງ chunk (ຖ້າມີ)
           const remainingChunk = parts.slice(1).join("\n");
           if (remainingChunk) {
             onChunk(remainingChunk);

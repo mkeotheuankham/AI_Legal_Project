@@ -14,29 +14,25 @@ from .database import SessionLocal, engine
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 
-# **ສຳຄັນ:** ໂຫຼດ API Key ຈາກໄຟລ໌ .env
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- Configuration ---
 PERSIST_DIRECTORY = "db_vector"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-# ໃຊ້ Gemini API URL ພ້ອມ API Key
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={GEMINI_API_KEY}"
 
-# --- ໂຫຼດ AI Model ແລະ Database ຕຽມໄວ້ ---
+# ... (Loading models and DB setup is the same)
 print("ກຳລັງໂຫຼດ Embedding Model...")
 embeddings = SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL)
 print("ກຳລັງໂຫຼດ Vector Database...")
 vectordb = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
 retriever = vectordb.as_retriever(search_kwargs={"k": 5})
 
-# -------------------------------
-
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# --- CORS Configuration ---
+# ... (CORS and get_db are the same)
 origins = ["http://localhost:5173", "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
@@ -45,8 +41,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# --- Database Dependency ---
 def get_db():
     db = SessionLocal()
     try:
@@ -58,22 +52,26 @@ def get_db():
 @app.post("/ask", response_model=schemas.QAHistory)
 async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(get_db)):
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set in the environment.")
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
     
     try:
-        # 1. ຄົ້ນຫາຂໍ້ມູນທີ່ກ່ຽວຂ້ອງ (Retrieval)
         relevant_docs = retriever.invoke(request.question)
         context = "\n\n".join([doc.page_content for doc in relevant_docs])
         
-        source_files = [os.path.basename(doc.metadata.get('source', 'N/A')) for doc in relevant_docs]
-        unique_sources = sorted(list(set(source_files)))
+        # **ແກ້ໄຂ:** ສະກັດເອົາຊື່ໄຟລ໌ ແລະ ມາດຕາ
+        source_details = []
+        for doc in relevant_docs:
+            source_file = os.path.basename(doc.metadata.get('source', 'N/A'))
+            article = doc.metadata.get('article', 'ບໍ່ລະບຸມາດຕາ')
+            # ສ້າງຂໍ້ຄວາມອ້າງອີງທີ່ສວຍງາມ
+            source_details.append(f"{source_file} ({article})")
+        
+        unique_sources = sorted(list(set(source_details)))
 
-        # 2. ສ້າງ Prompt ສຳລັບ Gemini
         prompt = f"""
         ທ່ານເປັນຜູ້ຊ່ວຍ AI ດ້ານກົດໝາຍລາວທີ່ຊ່ຽວຊານ. 
         ໃຫ້ຕອບຄຳຖາມຕໍ່ໄປນີ້ເປັນພາສາລາວທີ່ຊັດເຈນ, ກະທັດຮັດ ແລະ ເຂົ້າໃຈງ່າຍ.
         ຄຳຕອບຕ້ອງອີງໃສ່ຂໍ້ມູນຈາກ "ຂໍ້ມູນອ້າງອີງ" ທີ່ໃຫ້ມາເທົ່ານັ້ນ.
-        ໃຫ້ໃຊ້ Markdown formatting ເພື່ອເຮັດໃຫ້ຄຳຕອບອ່ານງ່າຍ (ເຊັ່ນ: ໃຊ້ `*` ສຳລັບ bullet points, `**ຄຳ**` ສຳລັບໂຕໜາ).
         ຖ້າຂໍ້ມູນບໍ່ພຽງພໍທີ່ຈະຕອບຄຳຖາມໄດ້, ໃຫ້ຕອບວ່າ "ຂໍອະໄພ, ຂ້າພະເຈົ້າບໍ່ສາມາດຊອກຫາຂໍ້ມູນທີ່ກ່ຽວຂ້ອງກັບຄຳຖາມນີ້ໃນຖານຂໍ້ມູນໄດ້."
 
         ---
@@ -83,10 +81,9 @@ async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(g
 
         ຄຳຖາມ: {request.question}
 
-        ຄຳຕອບທີ່ເປັນປະໂຫຍດ (ໃນຮູບແບບ Markdown):
+        ຄຳຕອບທີ່ເປັນປະໂຫຍດ:
         """
 
-        # 3. ສົ່ງ Request ໄປຫາ Gemini API
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -94,12 +91,10 @@ async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(g
             response.raise_for_status()
             result = response.json()
             
+            answer = "ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດໃນການສ້າງຄຳຕອບຈາກ AI."
             if (result.get('candidates') and result['candidates'][0].get('content')):
-                answer = result['candidates'][0]['content']['parts'][0]['text']
-            else:
-                answer = "ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດໃນການສ້າງຄຳຕອບຈາກ AI."
+                answer = result['candidates'][0]['content']['parts'][0].get('text', answer).strip()
 
-        # 4. ບັນທຶກລົງຖານຂໍ້ມູນ
         db_qa = models.QAHistory(
             question=request.question, 
             answer=answer,
@@ -111,13 +106,11 @@ async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(g
         
         return db_qa
 
-    except httpx.HTTPStatusError as http_err:
-        print(f"HTTP error occurred: {http_err} - {http_err.response.text}")
-        raise HTTPException(status_code=500, detail=f"Error communicating with AI service: {http_err.response.text}")
     except Exception as e:
         print(f"Error in /ask: {e}")
         raise HTTPException(status_code=500, detail="Internal server error occurred.")
 
+# ... (get_history is the same)
 @app.get("/history", response_model=List[schemas.QAHistory])
 def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     try:

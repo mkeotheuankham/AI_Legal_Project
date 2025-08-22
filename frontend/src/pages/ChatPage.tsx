@@ -137,7 +137,7 @@ export default function ChatPage(): ReactElement {
         gutterBottom
         sx={{ fontWeight: "bold", textAlign: "center" }}
       >
-        ຊ່ວຍເຫຼືອດ້ານກົດໝາຍ
+        SoLo Dev ຊ່ວຍເຫຼືອດ້ານກົດໝາຍ
       </Typography>
 
       {error && (

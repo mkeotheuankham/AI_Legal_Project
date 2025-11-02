@@ -2,12 +2,13 @@ fastapi
 uvicorn
 python-dotenv
 python-multipart
-httpx
 
 SQLAlchemy
 
+langchain-google-genai
 langchain
 langchain-community
+langchain_core
 sentence-transformers
 chromadb
 
@@ -34,7 +35,6 @@ idna
 iniconfig
 Jinja2
 joblib
-llama_cpp_python
 MarkupSafe
 mpmath
 networkx
@@ -45,8 +45,6 @@ pluggy
 pydantic
 pydantic_core
 Pygments
-pytest
-pytest-cov
 PyYAML
 regex
 requests

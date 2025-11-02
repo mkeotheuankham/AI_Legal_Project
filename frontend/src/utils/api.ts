@@ -1,77 +1,71 @@
-// src/utils/api.ts
-import axios from "axios";
+// ໄຟລ໌: frontend/src/utils/api.ts (ສະບັບແກ້ໄຂ)
 
-export interface MessageRecord {
+// 1. ດຶງ URL ຂອງ Backend ຈາກ Environment Variable
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+// 2. ກำນົດ Type ຂອງຂໍ້ມູນທີ່ໄດ້ຮັບ (ໃຫ້ກົງກັບ schemas.py)
+interface HistoryItem {
   id: number;
   question: string;
   answer: string;
-  timestamp: string;
-  sources: string[] | null;
+  sources: string[];
+  created_at: string;
 }
 
-// **ເພີ່ມ:** Interface ສຳລັບປະຫວັດການສົນທະນາ
-interface HistoryMessage {
-  role: "user" | "ai";
-  text: string;
-}
+// 3. ຕັ້ງ Type ຂອງຄຳຕອບ (ຄືກັນກັບ HistoryItem)
+type AskResponse = HistoryItem;
 
-const API_BASE_URL = "http://localhost:8000";
-
-export const streamQuestion = async (
-  question: string,
-  history: HistoryMessage[], // **ເພີ່ມ:** ຮັບ history ເປັນ parameter
-  onChunk: (chunk: string) => void,
-  onSources: (sources: string[]) => void,
-  onError: (error: string) => void
-) => {
+/**
+ * ຟັງຊັນທີ 1: ດຶງປະຫວັດການສົນທະນາ
+ */
+export const fetchHistory = async (): Promise<HistoryItem[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/ask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // **ເພີ່ມ:** ສົ່ງ history ໄປພ້ອມກັບ question
-      body: JSON.stringify({ question, history }),
-    });
-
-    if (!response.ok || !response.body) {
-      throw new Error(`Server error: ${response.statusText}`);
+    const response = await fetch(`${API_BASE_URL}/history`);
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
     }
-
-    // ... (Streaming logic is the same)
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let sourcesSent = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-
-      if (!sourcesSent && chunk.startsWith("SOURCES:")) {
-        try {
-          const parts = chunk.split("\n");
-          const sourcesJson = parts[0].replace("SOURCES:", "");
-          const sources = JSON.parse(sourcesJson);
-          onSources(sources);
-          sourcesSent = true;
-          const remainingChunk = parts.slice(1).join("\n");
-          if (remainingChunk) {
-            onChunk(remainingChunk);
-          }
-        } catch (e) {
-          console.error("Error parsing sources:", e);
-        }
-      } else {
-        onChunk(chunk);
-      }
-    }
+    return await response.json();
   } catch (error) {
-    console.error("Streaming API error:", error);
-    onError("ເກີດຂໍ້ຜິດພາດໃນການເຊື່ອມຕໍ່ກັບ AI.");
+    console.error("Failed to fetch history:", error);
+    return []; // ສົ່ງຄ່າ array ວ່າງກັບໄປຖ້າເກີດ error
   }
 };
 
-export const fetchHistory = async (): Promise<MessageRecord[]> => {
-  const response = await axios.get(`${API_BASE_URL}/history`);
-  return response.data;
+/**
+ * ຟັງຊັນທີ 2: ສົ່ງຄຳຖາມໃໝ່
+ * (ມີພຽງອັນດຽວ)
+ */
+export const askQuestion = async (question: string): Promise<AskResponse> => {
+  const response = await fetch(`${API_BASE_URL}/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ question: question }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Failed to ask question");
+  }
+
+  return await response.json();
+};
+
+/**
+ * ຟັງຊັນທີ 3: ລຶບປະຫວັດການສົນທະນາທັງໝົດ
+ * (ມີພຽງອັນດຽວ)
+ */
+export const deleteHistory = async (): Promise<{ ok: boolean }> => {
+  const response = await fetch(`${API_BASE_URL}/history`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Failed to delete history");
+  }
+
+  return await response.json();
 };

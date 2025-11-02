@@ -1,24 +1,22 @@
-# app/schemas.py
-from pydantic import BaseModel
-from datetime import datetime
-from typing import List, Optional, Any
+# ໄຟລ໌: backend/app/schemas.py
 
-# **ເພີ່ມ:** Schema ສຳລັບຂໍ້ຄວາມໃນປະຫວັດ
-class HistoryMessage(BaseModel):
-    role: str # "user" or "model"
-    text: str
+from pydantic import BaseModel, ConfigDict # [ ແກ້ໄຂ 1 ] - Import ConfigDict
+from typing import List
+from datetime import datetime # [ ແກ້ໄຂ 2 ] - Import datetime
 
-class QuestionRequest(BaseModel):
+class QARequest(BaseModel):
     question: str
-    # **ເພີ່ມ:** ຮັບເອົາປະຫວັດການສົນທະນາຈາກ Frontend
-    history: Optional[List[HistoryMessage]] = None
 
-class QAHistory(BaseModel):
-    id: int
+# ແຍກ Base Model ເພື່ອການຈັດການທີ່ງ່າຍຂຶ້ນ
+class QAHistoryBase(BaseModel):
     question: str
     answer: str
-    timestamp: datetime
-    sources: Optional[List[str]] = None
+    sources: List[str] = []
 
-    class Config:
-        from_attributes = True
+# Schema ສໍາລັບການສົ່ງຂໍ້ມູນອອກ (Response)
+class QAHistory(QAHistoryBase):
+    id: int
+    created_at: datetime # [ ແກ້ໄຂ 3 ] - ເພີ່ມ created_at ເພື່ອໃຫ້ກົງກັບ models.py
+
+    # [ ແກ້ໄຂ 4 ] - ປ່ຽນໄປໃຊ້ Pydantic V2 (model_config)
+    model_config = ConfigDict(from_attributes=True)

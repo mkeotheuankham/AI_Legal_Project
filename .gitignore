@@ -1,0 +1,17 @@
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE specific files
+# (ເຖິງແມ່ນ backend ຈະມີແລ້ວ, ແຕ່ Root ກໍຄວນມີໄວ້)
+.vscode/
+.idea/
+
+# Log files
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# ໄຟລ໌ທີ່ອາດຈະຫຼົງມາຢູ່ Root
+package-lock.json

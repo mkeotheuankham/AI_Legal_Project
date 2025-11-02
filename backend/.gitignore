@@ -1,26 +1,22 @@
-# Ignore model files
-/models/*
-!/models/.gitkeep  # ເພື່ອຮັກສາໂຟນເດີ models ໄວ້ເຖິງຈະວ່າງ
+# Environment variables (ສຳຄັນທີ່ສຸດ!)
+# ຫ້າມ Comment ແຖວນີ້ເດັດຂາດ
+.env
 
 # Virtual environment
+.venv/
 venv/
+*.venv/
 
 # Python cache
 __pycache__/
 *.py[cod]
+*$py.class
 
-db_vector/
-# Database files
+# Generated Databases
+db_vector/      # Vector database
+*.db            # SQLite database (ເຊັ່ນ legal_ai.db)
 *.sqlite3
-models/
-
-# Environment variables
-#.env
 
 # IDE specific files
 .vscode/
 .idea/
-
-# System files
-.DS_Store
-Thumbs.db

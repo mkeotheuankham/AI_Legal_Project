@@ -1,6 +1,6 @@
-# app/main.py
+# ໄຟລ໌: backend/app/main.py (ສະບັບແກ້ໄຂ)
+
 import os
-import json
 import httpx
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,36 +11,66 @@ from dotenv import load_dotenv
 from . import models, schemas
 from .database import SessionLocal, engine
 
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+# Import ຈາກ package ໃໝ່
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
 
-load_dotenv()
+# ໂຫຼດ .env
+load_dotenv() 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+if not GEMINI_API_KEY:
+    print("FATAL ERROR: ບໍ່ພົບ 'GEMINI_API_KEY' ໃນໄຟລ໌ .env")
+    # ... (error message) ...
+
 # --- Configuration ---
-PERSIST_DIRECTORY = "db_vector"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={GEMINI_API_KEY}"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.abspath(os.path.join(APP_DIR, os.pardir))
+PERSIST_DIRECTORY = os.path.join(BACKEND_DIR, "db_vector")
+EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 
-# ... (Loading models and DB setup is the same)
+# ===================================================================
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# ===================================================================
+# ປ່ຽນຊື່ Model ໃຫ້ກົງກັບລາຍການຈາກ curl (ບໍ່ມີ 1.5)
+GEMINI_MODEL = "gemini-flash-latest"
+# ===================================================================
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲
+# ===================================================================
+
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+
+# --- Loading Models (Global - CPU-only) ---
 print("ກຳລັງໂຫຼດ Embedding Model...")
-embeddings = SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL)
-print("ກຳລັງໂຫຼດ Vector Database...")
-vectordb = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
-retriever = vectordb.as_retriever(search_kwargs={"k": 5})
+embeddings = HuggingFaceEmbeddings(
+    model_name=EMBEDDING_MODEL,
+    model_kwargs={'device': 'cpu'}, 
+    encode_kwargs={'normalize_embeddings': True}
+)
 
+print("ກຳລັງໂຫຼດ Vector Database...")
+try:
+    vectordb = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
+    retriever = vectordb.as_retriever(search_kwargs={"k": 5})
+    print("Vector Database ໂຫຼດສຳເລັດ.")
+except Exception as e:
+    print(f"Error loading Vector DB from {PERSIST_DIRECTORY}: {e}")
+    retriever = None
+
+# --- DB and App Setup ---
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# ... (CORS and get_db are the same)
-origins = ["http://localhost:5173", "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 def get_db():
     db = SessionLocal()
     try:
@@ -48,53 +78,81 @@ def get_db():
     finally:
         db.close()
 
+# --- Helper Function ---
+def format_docs(docs: List[Document]) -> str:
+    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
+    formatted = []
+    for i, doc in enumerate(docs):
+        source = doc.metadata.get('source', 'N/A')
+        article = doc.metadata.get('article', 'N/A')
+        content = doc.page_content
+        formatted.append(f"--- ແຫຼ່ງອ້າງອີງ {i+1} (ຈາກ {source} - {article}) ---\n{content}\n---")
+    return "\n\n".join(formatted)
+
 # --- API Endpoints ---
+@app.on_event("startup")
+async def startup_event():
+    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
+    if retriever is None:
+        print("WARNING: Server is running, but Retriever is not loaded.")
+    else:
+        print("Application startup complete. Models loaded.")
+
 @app.post("/ask", response_model=schemas.QAHistory)
-async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(get_db)):
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
+async def ask(request: schemas.QARequest, db: Session = Depends(get_db)):
+    if retriever is None:
+        raise HTTPException(status_code=500, detail="Vector Database is not loaded. Please run ingest.py.")
     
     try:
+        print(f"Received question: {request.question}")
+        
+        # 1. ດຶງຂໍ້ມູນ (Retrieve context)
+        print("Retrieving context...")
         relevant_docs = retriever.invoke(request.question)
-        context = "\n\n".join([doc.page_content for doc in relevant_docs])
+        context = format_docs(relevant_docs)
+        unique_sources = sorted(list(set([doc.metadata.get("source", "N/A") for doc in relevant_docs])))
         
-        # **ແກ້ໄຂ:** ສະກັດເອົາຊື່ໄຟລ໌ ແລະ ມາດຕາ
-        source_details = []
-        for doc in relevant_docs:
-            source_file = os.path.basename(doc.metadata.get('source', 'N/A'))
-            article = doc.metadata.get('article', 'ບໍ່ລະບຸມາດຕາ')
-            # ສ້າງຂໍ້ຄວາມອ້າງອີງທີ່ສວຍງາມ
-            source_details.append(f"{source_file} ({article})")
-        
-        unique_sources = sorted(list(set(source_details)))
-
+        # 2. ສ້າງ Prompt ສົ່ງໃຫ້ Gemini
         prompt = f"""
-        ທ່ານເປັນຜູ້ຊ່ວຍ AI ດ້ານກົດໝາຍລາວທີ່ຊ່ຽວຊານ. 
-        ໃຫ້ຕອບຄຳຖາມຕໍ່ໄປນີ້ເປັນພາສາລາວທີ່ຊັດເຈນ, ກະທັດຮັດ ແລະ ເຂົ້າໃຈງ່າຍ.
-        ຄຳຕອບຕ້ອງອີງໃສ່ຂໍ້ມູນຈາກ "ຂໍ້ມູນອ້າງອີງ" ທີ່ໃຫ້ມາເທົ່ານັ້ນ.
-        ຖ້າຂໍ້ມູນບໍ່ພຽງພໍທີ່ຈະຕອບຄຳຖາມໄດ້, ໃຫ້ຕອບວ່າ "ຂໍອະໄພ, ຂ້າພະເຈົ້າບໍ່ສາມາດຊອກຫາຂໍ້ມູນທີ່ກ່ຽວຂ້ອງກັບຄຳຖາມນີ້ໃນຖານຂໍ້ມູນໄດ້."
+        ທ່ານຄື AI ຜູ້ຊ່ວຍດ້ານກົດໝາຍຂອງ ສປປ ລາວ ທີ່ຊື່ສັດ ແລະ ຕອບຕາມຄວາມຈິງ.
+        ກະລຸນາຕອບຄຳຖາມໂດຍອີງໃສ່ "ຂໍ້ມູນອ້າງອີງ" ທີ່ໃຫ້ມາເທົ່ານັ້ນ.
+        ຫ້າມຄິດຄຳຕອບເອງ ຫຼື ໃຊ້ຄວາມຮູ້ນອກເໜືອຈາກຂໍ້ມູນອ້າງອີງ.
+        ຖ້າຂໍ້ມູນອ້າງອີງບໍ່ມີຄຳຕອບ, ໃຫ້ຕອບວ່າ "ຂໍອະໄພ, ຂ້າພະເຈົ້າບໍ່ສາມາດຊອກຫາຂໍ້ມູນກ່ຽວກັບເລື່ອງນີ້ໄດ້ໃນຖານຂໍ້ມູນ".
 
-        ---
         ຂໍ້ມູນອ້າງອີງ:
         {context}
-        ---
-
-        ຄຳຖາມ: {request.question}
-
-        ຄຳຕອບທີ່ເປັນປະໂຫຍດ:
+        
+        ຄຳຖາມ:
+        {request.question}
+        
+        ຄຳຕອບ (ຕອບເປັນພາສາລາວ):
         """
-
+        
+        # 3. ເອີ້ນ Gemini API
+        print("Calling Gemini API...")
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(GEMINI_API_URL, json=payload)
-            response.raise_for_status()
+            
+            if response.status_code != 200:
+                print(f"Gemini API Error: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=500, detail=f"Gemini API Error: {response.text}")
+
             result = response.json()
             
+            # 4. ແກະຄຳຕອບ
             answer = "ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດໃນການສ້າງຄຳຕອບຈາກ AI."
-            if (result.get('candidates') and result['candidates'][0].get('content')):
-                answer = result['candidates'][0]['content']['parts'][0].get('text', answer).strip()
+            if (result.get('candidates') and 
+                result['candidates'][0].get('content') and
+                result['candidates'][0]['content']['parts'][0].get('text')):
+                answer = result['candidates'][0]['content']['parts'][0]['text'].strip()
+            else:
+                block_reason = result.get('promptFeedback', {}).get('blockReason', 'Unknown')
+                answer = f"ຂໍອະໄພ, ຄຳຕອບຖືກບລັອກໂດຍ Gemini. ເຫດຜົນ: {block_reason}"
 
+        # 5. ບັນທຶກລົງ DB
+        print("Saving to database...")
         db_qa = models.QAHistory(
             question=request.question, 
             answer=answer,
@@ -104,18 +162,32 @@ async def ask_question(request: schemas.QuestionRequest, db: Session = Depends(g
         db.commit()
         db.refresh(db_qa)
         
+        print("Done.")
         return db_qa
 
     except Exception as e:
+        db.rollback()
         print(f"Error in /ask: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error occurred.")
+        raise HTTPException(status_code=500, detail=f"Internal server error occurred: {str(e)}")
 
-# ... (get_history is the same)
 @app.get("/history", response_model=List[schemas.QAHistory])
 def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
     try:
-        history = db.query(models.QAHistory).order_by(models.QAHistory.id.asc()).offset(skip).limit(limit).all()
+        history = db.query(models.QAHistory).order_by(models.QAHistory.id.desc()).offset(skip).limit(limit).all()
         return history
     except Exception as e:
         print(f"Error in /history: {e}")
-        raise HTTPException(status_code=500, detail="Could not fetch history.")
+        raise HTTPException(status_code=500, detail="Internal server error occurred.")
+
+@app.delete("/history")
+def delete_history(db: Session = Depends(get_db)):
+    # ... (ເນື້ອໃນຟັງຊຄືເກົ່າ) ...
+    try:
+        num_rows_deleted = db.query(models.QAHistory).delete()
+        db.commit()
+        return {"ok": True, "num_rows_deleted": num_rows_deleted}
+    except Exception as e:
+        db.rollback()
+        print(f"Error in /history DELETE: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete. {str(e)}")

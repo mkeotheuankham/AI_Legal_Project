@@ -1,4 +1,5 @@
-// src/pages/ChatPage.tsx
+// ໄຟລ໌: frontend/src/pages/ChatPage.tsx (ສະບັບປັບປຸງ)
+
 import {
   useState,
   useEffect,
@@ -6,11 +7,14 @@ import {
   type ReactElement,
   Fragment,
 } from "react";
-import { Box, Container, Typography, Alert } from "@mui/material";
+import { Box, Container, Typography, Alert, Button } from "@mui/material";
+// [ ປັບປຸງ 1 ] - Import ໄອຄອນ Delete
+import { Add as AddIcon, Delete as DeleteIcon } from "@mui/icons-material";
 import ChatBubble from "../components/ChatBubble";
 import InputBar from "../components/InputBar";
 import DateSeparator from "../components/DateSeparator";
-import { fetchHistory } from "../utils/api"; // ບໍ່ຕ້ອງ import sendQuestion ແລ້ວ
+// [ ປັບປຸງ 2 ] - Import ຟັງຊັນ deleteHistory
+import { fetchHistory, askQuestion, deleteHistory } from "../utils/api";
 
 interface Message {
   id: number | string;
@@ -21,6 +25,7 @@ interface Message {
 }
 
 const isSameDay = (d1: Date, d2: Date) => {
+  // ... (ເນື້ອໃນຟັງຊັນ isSameDay) ...
   return (
     d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
@@ -35,122 +40,177 @@ export default function ChatPage(): ReactElement {
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
+  // ... (ຟັງຊັນ useEffect [messages] - ຄືເກົ່າ) ...
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages]);
 
+  // ... (ຟັງຊັນ useEffect [] - loadHistory - ຄືເກົ່າ) ...
   useEffect(() => {
     const loadHistory = async () => {
+      // ... (ເນື້ອໃນຟັງຊັນ loadHistory) ...
+      setIsLoading(true);
+      setError(null);
       try {
-        setError(null);
         const history = await fetchHistory();
-        const formattedMessages: Message[] = [];
-        history.forEach((item) => {
-          formattedMessages.push({
-            id: `${item.id}-q`,
-            sender: "user",
-            text: item.question,
-            timestamp: item.timestamp,
-          });
-          formattedMessages.push({
-            id: item.id,
-            sender: "ai",
-            text: item.answer,
-            timestamp: item.timestamp,
-            sources: item.sources,
-          });
-        });
+        const formattedMessages: Message[] = history
+          .reverse()
+          .map((item) => [
+            {
+              id: `${item.id}-q`,
+              sender: "user" as const,
+              text: item.question,
+              timestamp: item.created_at,
+            },
+            {
+              id: item.id,
+              sender: "ai" as const,
+              text: item.answer,
+              sources: item.sources,
+              timestamp: item.created_at,
+            },
+          ])
+          .flat();
+
         setMessages(formattedMessages);
       } catch (err) {
-        console.error("Error loading history:", err);
-        setError("ບໍ່ສາມາດໂຫຼດປະຫວັດການສົນທະນາໄດ້.");
+        console.error("Failed to fetch history:", err);
+        setError("ບໍ່ສາມາດໂຫຼດປະຫວັດການສົນທະນາໄດ້");
+      } finally {
+        setIsLoading(false);
       }
     };
     loadHistory();
   }, []);
 
-  // Function sendQuestion ສຳລັບ axios
-  const sendQuestion = async (question: string) => {
-    const response = await fetch("http://localhost:8000/ask", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
-    });
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
-    }
-    return response.json();
-  };
-
+  // ... (ຟັງຊັນ handleSendQuestion - ຄືເກົ່າ) ...
   const handleSendQuestion = async (question: string) => {
+    // ... (ເນື້ອໃນຟັງຊັນ handleSendQuestion) ...
+    if (!question.trim()) return;
+    setIsLoading(true);
     setError(null);
     const userMessage: Message = {
-      id: `user-${Date.now()}`,
+      id: Date.now().toString(),
       sender: "user",
       text: question,
       timestamp: new Date().toISOString(),
     };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
+    setMessages((prevMessages) => [...prevMessages, userMessage]);
     try {
-      const response = await sendQuestion(question);
-
-      // **ຈຸດສຳຄັນ:** ເພີ່ມ console.log ເພື່ອເບິ່ງຂໍ້ມູນທີ່ໄດ້ຮັບ
-      console.log("Data received from backend:", response);
-
-      // ກວດສອບໃຫ້ແນ່ໃຈວ່າ response ມີ field ທີ່ຈຳເປັນຄົບຖ້ວນ
-      if (response && response.id && response.answer) {
-        const aiMessage: Message = {
-          id: response.id,
-          sender: "ai",
-          text: response.answer,
-          timestamp: response.timestamp,
-          sources: response.sources,
-        };
-        setMessages((prev) => [...prev, aiMessage]);
-      } else {
-        // ຖ້າຂໍ້ມູນບໍ່ຄົບ, ໃຫ້ສະແດງ Error
-        console.error("Invalid response structure from backend:", response);
-        setError("ໄດ້ຮັບຂໍ້ມູນທີ່ບໍ່ສົມບູນຈາກເຊີບເວີ.");
-      }
+      const response = await askQuestion(question);
+      const aiMessage: Message = {
+        id: response.id,
+        sender: "ai",
+        text: response.answer,
+        sources: response.sources,
+        timestamp: response.created_at,
+      };
+      setMessages((prevMessages) => [...prevMessages, aiMessage]);
     } catch (err) {
-      console.error("Error sending question:", err);
-      setError("ເກີດຂໍ້ຜິດພາດໃນການສົ່ງຄຳຖາມ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.");
-      setMessages((prev) => prev.filter((msg) => msg.id !== userMessage.id));
+      console.error("Failed to send message:", err);
+      const errorMessage = "ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດ. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.";
+      setError(errorMessage);
+      const errorBubble: Message = {
+        id: `error-${Date.now()}`,
+        sender: "ai",
+        text: errorMessage,
+      };
+      setMessages((prevMessages) => [...prevMessages, errorBubble]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ຟັງຊັນລ້າງໜ້າຈໍ (ຄືເກົ່າ)
+  const handleNewChat = () => {
+    setMessages([]);
+    setError(null);
+  };
+
+  // [ ປັບປຸງ 3 ] - ເພີ່ມຟັງຊັນລຶບຂໍ້ມູນໃນ DB
+  const handleDeleteHistory = async () => {
+    // 1. ຖາມຢືນຢັນກ່ອນ
+    if (
+      window.confirm(
+        "ທ່ານແນ່ໃຈບໍ່ວ່າຕ້ອງການລຶບປະຫວັດການສົນທະນາທັງໝົດ? ການກະທຳນີ້ບໍ່ສາມາດຍົກເລີກໄດ້."
+      )
+    ) {
+      try {
+        // 2. ເອີ້ນ API ເພື່ອລຶບ
+        await deleteHistory();
+        // 3. ລ້າງຂໍ້ຄວາມເທິງໜ້າຈໍ
+        handleNewChat();
+      } catch (err) {
+        console.error("Failed to delete history:", err);
+        setError("ບໍ່ສາມາດລຶບປະຫວັດໄດ້. ກະລຸນາລອງໃໝ່.");
+      }
     }
   };
 
   return (
     <Container
       maxWidth="md"
-      sx={{ py: 4, display: "flex", flexDirection: "column", height: "100vh" }}
+      sx={{
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        py: 2,
+      }}
     >
-      <Typography
-        variant="h4"
-        gutterBottom
-        sx={{ fontWeight: "bold", textAlign: "center" }}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap", // ຊ່ວຍໃຫ້ປຸ່ມຕົກລົງລຸ່ມໃນຈໍນ້ອຍ
+          mb: 2,
+        }}
       >
-        SoLo Dev ຊ່ວຍເຫຼືອດ້ານກົດໝາຍ
-      </Typography>
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{ mr: 2 }} // ເພີ່ມຍະຫວ່າງ
+        >
+          AI ຜູ້ຊ່ວຍດ້ານກົດໝາຍ
+        </Typography>
+
+        {/* [ ປັບປຸງ 4 ] - ເພີ່ມປຸ່ມ "ລຶບປະຫວັດ" */}
+        <Box>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={handleNewChat}
+            sx={{ mr: 1 }} // ເພີ່ມຍະຫວ່າງ
+          >
+            ແຊັດໃໝ່
+          </Button>
+          <Button
+            variant="outlined"
+            color="error" // ປັບເປັນສີແດງ
+            startIcon={<DeleteIcon />}
+            onClick={handleDeleteHistory}
+          >
+            ລຶບປະຫວັດ
+          </Button>
+        </Box>
+      </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2, mt: -1 }}>
           {error}
         </Alert>
       )}
 
+      {/* ... (ສ່ວນທີ່ເຫຼືອຂອງ Component ແມ່ນຄືເກົ່າ) ... */}
       <Box
         ref={chatContainerRef}
         sx={{ flexGrow: 1, overflowY: "auto", mb: 2, px: 1 }}
       >
         {messages.map((msg, index) => {
+          // ... (ໂຄດສະແດງ DateSeparator ແລະ ChatBubble) ...
           const currentDate = msg.timestamp
             ? new Date(msg.timestamp)
             : new Date();
@@ -180,11 +240,11 @@ export default function ChatPage(): ReactElement {
           sx={{
             textAlign: "center",
             display: "block",
-            mt: 2,
             color: "text.secondary",
+            mt: 1,
           }}
         >
-          AI ອາດຈະຕອບຜິດພາດໄດ້. ກະລຸນາກວດສອບຂໍ້ມູນສຳຄັນ.
+          AI ສາມາດຕອບຜິດພາດໄດ້. ກະລຸນາກວດສອບຂໍ້ມູນສຳຄັນ.
         </Typography>
       </Box>
     </Container>

@@ -1,121 +1,113 @@
-# backend/ingest.py
+# ໄຟລ໌: backend/ingest.py (ສະບັບແກ້ໄຂ)
+
 import os
+import glob
 import re
+from tqdm import tqdm
 import docx
-from langchain.docstore.document import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_core.documents import Document
 
-# --- Configuration ---
-SOURCE_DIRECTORY = "../source_documents/current_raw_2025" 
-PERSIST_DIRECTORY = "db_vector" 
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+# [ ປັບປຸງ 1 ] - Import ຈາກ package ໃໝ່
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings # ປ່ຽນຈາກ SentenceTransformerEmbeddings
 
-def process_document_by_articles(filepath):
-    """
-    ອ່ານໄຟລ໌ .docx ແລະ ສະກັດຂໍ້ຄວາມໂດຍແຍກຕາມ "ມາດຕາ".
-    """
-    try:
-        # ຂ້າມໄຟລ໌ຊົ່ວຄາວຂອງ Word
-        if os.path.basename(filepath).startswith('~$') or not filepath.endswith('.docx'):
-            return []
-        
-        doc = docx.Document(filepath)
-        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+# --- Configuration (ປັບປຸງໃໝ່) ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
+SOURCE_DIRECTORY = os.path.join(PROJECT_ROOT, "source_documents")
+PERSIST_DIRECTORY = os.path.join(SCRIPT_DIR, "db_vector")
+EMBEDDING_MODEL = "intfloat/multilingual-e5-base" # ໃຊ້ Model ທີ່ໄວຂຶ້ນ
 
-        documents = []
-        current_article_title = "ພາກທົ່ວໄປ"
-        current_article_content = ""
-        
-        # **Regex ທີ່ປັບປຸງໃໝ່:** ຮອງຮັບຍະຫວ່າງ ແລະ ຮູບແບບທີ່ຫຼາກຫຼາຍ
-        article_pattern = re.compile(r'^(ມາດຕາ\s*ທີ?\s*\d+.*)')
+ARTICLE_REGEX = re.compile(r"^(ມາດຕາ\s*\d+.*)", re.IGNORECASE)
 
-        for para in paragraphs:
-            clean_para = para.strip()
-            match = article_pattern.match(clean_para)
-            
-            if match:
-                if current_article_content:
-                    documents.append(Document(
-                        page_content=current_article_content.strip(),
-                        metadata={
-                            'source': os.path.basename(filepath),
-                            'article': current_article_title
-                        }
-                    ))
-                
-                current_article_title = match.group(0).strip()
-                current_article_content = clean_para.replace(current_article_title, "", 1).strip()
-            else:
-                current_article_content += "\n" + clean_para
-
-        if current_article_content:
-            documents.append(Document(
-                page_content=current_article_content.strip(),
-                metadata={
-                    'source': os.path.basename(filepath),
-                    'article': current_article_title
-                }
-            ))
-            
-        # **ເພີ່ມ:** ລາຍງານຜົນການສະກັດຂໍ້ມູນ
-        if documents and not (len(documents) == 1 and documents[0].metadata['article'] == "ພາກທົ່ວໄປ"):
-            print(f"  -> ສະກັດໄດ້ {len(documents)} ມາດຕາ ຈາກ {os.path.basename(filepath)}")
-        else:
-            print(f"  -> ຄຳເຕືອນ: ບໍ່ພົບມາດຕາໃນ {os.path.basename(filepath)}. ຈະລວມເປັນເອກະສານດຽວ.")
-            # Fallback: ຖ້າບໍ່ພົບມາດຕາ, ໃຫ້ລວມເນື້ອໃນທັງໝົດ
-            full_text = "\n".join(paragraphs)
-            return [Document(
-                page_content=full_text,
-                metadata={
-                    'source': os.path.basename(filepath),
-                    'article': 'ເນື້ອໃນທັງໝົດ'
-                }
-            )]
-
-        return documents
-    except Exception as e:
-        print(f"  -> ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດປະມວນຜົນໄຟລ໌ {os.path.basename(filepath)}: {e}")
+def load_and_chunk_documents() -> list[Document]:
+    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
+    all_chunks = []
+    docx_files = glob.glob(os.path.join(SOURCE_DIRECTORY, "**", "*.docx"), recursive=True)
+    
+    if not docx_files:
+        print(f"ບໍ່ພົບໄຟລ໌ .docx ໃນ: {SOURCE_DIRECTORY}")
         return []
 
-def load_and_process_documents(directory_path):
-    """
-    ໂຫຼດ ແລະ ປະມວນຜົນເອກະສານທັງໝົດໃນໂຟເດີ
-    """
-    all_processed_docs = []
-    print(f"ກຳລັງປະມວນຜົນເອກະສານຈາກ: {directory_path}")
-    for filename in os.listdir(directory_path):
-        filepath = os.path.join(directory_path, filename)
-        if os.path.isfile(filepath):
-            print(f"- ກำลังประมวลผล: {filename}")
-            processed_docs = process_document_by_articles(filepath)
-            all_processed_docs.extend(processed_docs)
-    
-    print(f"ປະມວນຜົນສຳເລັດ, ໄດ້ທັງໝົດ {len(all_processed_docs)} ເອກະສານ/ມາດຕາ.")
-    return all_processed_docs
+    print(f"ກຳລັງປະມວນຜົນ {len(docx_files)} ໄຟລ໌ .docx...")
+
+    for file_path in tqdm(docx_files, desc="Processing files"):
+        try:
+            doc = docx.Document(file_path)
+            file_name = os.path.basename(file_path)
+            
+            current_article_title = "ບົດນຳ"
+            current_article_content = []
+
+            for para in doc.paragraphs:
+                text = para.text.strip()
+                if not text:
+                    continue
+
+                match = ARTICLE_REGEX.match(text)
+                
+                if match:
+                    if current_article_content:
+                        content_str = "\n".join(current_article_content)
+                        metadata = {
+                            "source": file_name,
+                            "article": current_article_title
+                        }
+                        all_chunks.append(Document(page_content=content_str, metadata=metadata))
+                    
+                    current_article_title = text
+                    current_article_content = [text]
+                
+                else:
+                    current_article_content.append(text)
+            
+            if current_article_content:
+                content_str = "\n".join(current_article_content)
+                metadata = {
+                    "source": file_name,
+                    "article": current_article_title
+                }
+                all_chunks.append(Document(page_content=content_str, metadata=metadata))
+
+        except Exception as e:
+            print(f"Error processing file {file_path}: {e}")
+            
+    return all_chunks
 
 def main():
-    documents = load_and_process_documents(SOURCE_DIRECTORY)
+    print("ເລີ່ມຕົ້ນຂະບວນການ Ingestion...")
+    
+    # 1. ໂຫຼດ ແລະ ແບ່ງຂໍ້ມູນຕາມມາດຕາ
+    documents = load_and_chunk_documents()
+    
     if not documents:
-        print("ບໍ່ພົບເອກະສານທີ່ສາມາດປະມວນຜົນໄດ້.")
+        print("ບໍ່ພົບເອກະສານທີ່ຈະປະມວນຜົນ.")
         return
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    texts = text_splitter.split_documents(documents)
-    print(f"ຕັດຂໍ້ຄວາມສຳເລັດ, ໄດ້ທັງໝົດ {len(texts)} ທ່ອນຂໍ້ມູນ.")
+    print(f"ສ້າງ chunks ສຳເລັດ. ຈຳນວນ chunks ທັງໝົດ: {len(documents)}")
 
+    # 2. ໂຫຼດ Embedding Model
     print(f"ກຳລັງໂຫຼດ Embedding Model: {EMBEDDING_MODEL}")
-    embeddings = SentenceTransformerEmbeddings(model_name=EMBEDDING_MODEL)
+    
+    # [ ປັບປຸງ 2 ] - ປ່ຽນ class ໃຫ້ເປັນ HuggingFaceEmbeddings
+    embeddings = HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL,
+        model_kwargs={'device': 'cpu'}, # ບັງຄັບໃຊ້ CPU
+        encode_kwargs={'normalize_embeddings': True}
+    )
 
-    print(f"ກຳລັງສ້າງ Vector Database...")
+    # 3. ສ້າງ Vector Store (ChromaDB)
+    print(f"ກຳລັງສ້າງ Vector Store ຢູ່ທີ່: {PERSIST_DIRECTORY}")
+    
+    # [ ປັບປຸງ 3 ] - ໃຊ້ Chroma (ທີ່ import ມາຈາກບ່ອນໃໝ່)
     vectordb = Chroma.from_documents(
-        documents=texts,
+        documents=documents,
         embedding=embeddings,
         persist_directory=PERSIST_DIRECTORY
     )
-    vectordb.persist()
-    print("ສ້າງ Vector Database ສຳເລັດ!")
+    
+    print("Persistent vector store ສຳເລັດ.")
+    print("Ingestion complete!")
 
 if __name__ == "__main__":
     main()

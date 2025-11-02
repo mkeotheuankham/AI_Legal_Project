@@ -37,7 +37,7 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
   const handleCopy = () => {
     navigator.clipboard.writeText(message.text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // ປ່ຽນກັບເປັນປຸ່ມເດີມຫຼັງຈາກ 2 ວິນາທີ
+      setTimeout(() => setCopied(false), 2000); // Reset button after 2 seconds
     });
   };
 
@@ -93,6 +93,7 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
         )}
       </Box>
 
+      {/* Copy button for AI messages */}
       {!isUser && (
         <Tooltip
           title={copied ? "ກັອບປີ້ແລ້ວ!" : "ກັອບປີ້ຄຳຕອບ"}

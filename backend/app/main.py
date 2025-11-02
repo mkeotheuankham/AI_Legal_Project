@@ -22,7 +22,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
     print("FATAL ERROR: ບໍ່ພົບ 'GEMINI_API_KEY' ໃນໄຟລ໌ .env")
-    # ... (error message) ...
 
 # --- Configuration ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,15 +29,8 @@ BACKEND_DIR = os.path.abspath(os.path.join(APP_DIR, os.pardir))
 PERSIST_DIRECTORY = os.path.join(BACKEND_DIR, "db_vector")
 EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 
-# ===================================================================
-# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-# ===================================================================
-# ປ່ຽນຊື່ Model ໃຫ້ກົງກັບລາຍການຈາກ curl (ບໍ່ມີ 1.5)
+# ໃຊ້ Model ທີ່ຖືກຕ້ອງທີ່ເຮົາຫາພົບ
 GEMINI_MODEL = "gemini-flash-latest"
-# ===================================================================
-# ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲
-# ===================================================================
-
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 
 
@@ -80,7 +72,6 @@ def get_db():
 
 # --- Helper Function ---
 def format_docs(docs: List[Document]) -> str:
-    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
     formatted = []
     for i, doc in enumerate(docs):
         source = doc.metadata.get('source', 'N/A')
@@ -92,7 +83,6 @@ def format_docs(docs: List[Document]) -> str:
 # --- API Endpoints ---
 @app.on_event("startup")
 async def startup_event():
-    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
     if retriever is None:
         print("WARNING: Server is running, but Retriever is not loaded.")
     else:
@@ -110,9 +100,33 @@ async def ask(request: schemas.QARequest, db: Session = Depends(get_db)):
         print("Retrieving context...")
         relevant_docs = retriever.invoke(request.question)
         context = format_docs(relevant_docs)
-        unique_sources = sorted(list(set([doc.metadata.get("source", "N/A") for doc in relevant_docs])))
+
+        # ===================================================================
+        # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+        # ===================================================================
+        # ປ່ຽນຈາກການເກັບ unique_sources ແບບ string
+        # ມາເປັນການເກັບ object ຂອງແຫຼ່ງຂໍ້ມູນ
         
-        # 2. ສ້າງ Prompt ສົ່ງໃຫ້ Gemini
+        source_objects = []
+        seen_combinations = set() # ເພື່ອປ້ອງກັນການສະແດງຜົນຊ້ຳ
+
+        for doc in relevant_docs:
+            file_name = doc.metadata.get("source", "N/A")
+            article_title = doc.metadata.get("article", "ບົດນຳທົ່ວໄປ") # ດຶງຊື່ມາດຕາ
+            
+            combination_key = (file_name, article_title)
+            
+            if combination_key not in seen_combinations:
+                source_objects.append({
+                    "file": file_name,
+                    "article": article_title
+                })
+                seen_combinations.add(combination_key)
+        # ===================================================================
+        # ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲
+        # ===================================================================
+        
+        # 2. ສ້າງ Prompt ສົ່ງໃຫ້ Gemini (ຄືເກົ່າ)
         prompt = f"""
         ທ່ານຄື AI ຜູ້ຊ່ວຍດ້ານກົດໝາຍຂອງ ສປປ ລາວ ທີ່ຊື່ສັດ ແລະ ຕອບຕາມຄວາມຈິງ.
         ກະລຸນາຕອບຄຳຖາມໂດຍອີງໃສ່ "ຂໍ້ມູນອ້າງອີງ" ທີ່ໃຫ້ມາເທົ່ານັ້ນ.
@@ -128,7 +142,7 @@ async def ask(request: schemas.QARequest, db: Session = Depends(get_db)):
         ຄຳຕອບ (ຕອບເປັນພາສາລາວ):
         """
         
-        # 3. ເອີ້ນ Gemini API
+        # 3. ເອີ້ນ Gemini API (ຄືເກົ່າ)
         print("Calling Gemini API...")
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
@@ -141,7 +155,7 @@ async def ask(request: schemas.QARequest, db: Session = Depends(get_db)):
 
             result = response.json()
             
-            # 4. ແກະຄຳຕອບ
+            # 4. ແກະຄຳຕອບ (ຄືເກົ່າ)
             answer = "ຂໍອະໄພ, ເກີດຂໍ້ຜິດພາດໃນການສ້າງຄຳຕອບຈາກ AI."
             if (result.get('candidates') and 
                 result['candidates'][0].get('content') and
@@ -156,7 +170,7 @@ async def ask(request: schemas.QARequest, db: Session = Depends(get_db)):
         db_qa = models.QAHistory(
             question=request.question, 
             answer=answer,
-            sources=unique_sources
+            sources=source_objects # <--- ສົ່ງ object ໃໝ່ທີ່ເຮົາສ້າງ ໄປບັນທຶກ
         )
         db.add(db_qa)
         db.commit()
@@ -172,7 +186,6 @@ async def ask(request: schemas.QARequest, db: Session = Depends(get_db)):
 
 @app.get("/history", response_model=List[schemas.QAHistory])
 def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # ... (ເນື້ອໃນຟັງຊັນຄືເກົ່າ) ...
     try:
         history = db.query(models.QAHistory).order_by(models.QAHistory.id.desc()).offset(skip).limit(limit).all()
         return history
@@ -182,7 +195,6 @@ def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 @app.delete("/history")
 def delete_history(db: Session = Depends(get_db)):
-    # ... (ເນື້ອໃນຟັງຊຄືເກົ່າ) ...
     try:
         num_rows_deleted = db.query(models.QAHistory).delete()
         db.commit()
@@ -190,4 +202,4 @@ def delete_history(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         print(f"Error in /history DELETE: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete. {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete. {str(e)}")

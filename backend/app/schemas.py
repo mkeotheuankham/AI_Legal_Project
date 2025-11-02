@@ -1,22 +1,22 @@
-# ໄຟລ໌: backend/app/schemas.py
+# ໄຟລ໌: backend/app/schemas.py (ສະບັບແກ້ໄຂ)
 
-from pydantic import BaseModel, ConfigDict # [ ແກ້ໄຂ 1 ] - Import ConfigDict
+from pydantic import BaseModel, ConfigDict
 from typing import List
-from datetime import datetime # [ ແກ້ໄຂ 2 ] - Import datetime
+from datetime import datetime
+
+# 1. ສ້າງ Schema ສໍາລັບ "ແຫຼ່ງອ້າງອີງ"
+class SourceDocument(BaseModel):
+    file: str
+    article: str
 
 class QARequest(BaseModel):
     question: str
 
-# ແຍກ Base Model ເພື່ອການຈັດການທີ່ງ່າຍຂຶ້ນ
-class QAHistoryBase(BaseModel):
+class QAHistory(BaseModel):
+    id: int
     question: str
     answer: str
-    sources: List[str] = []
+    sources: List[SourceDocument] # <--- 2. ປ່ຽນຈາກ List[str] ເປັນ List[SourceDocument]
+    created_at: datetime
 
-# Schema ສໍາລັບການສົ່ງຂໍ້ມູນອອກ (Response)
-class QAHistory(QAHistoryBase):
-    id: int
-    created_at: datetime # [ ແກ້ໄຂ 3 ] - ເພີ່ມ created_at ເພື່ອໃຫ້ກົງກັບ models.py
-
-    # [ ແກ້ໄຂ 4 ] - ປ່ຽນໄປໃຊ້ Pydantic V2 (model_config)
     model_config = ConfigDict(from_attributes=True)

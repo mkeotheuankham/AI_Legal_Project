@@ -4,16 +4,28 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
-// 2. ກำນົດ Type ຂອງຂໍ້ມູນທີ່ໄດ້ຮັບ (ໃຫ້ກົງກັບ schemas.py)
-interface HistoryItem {
+// ===================================================================
+// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+// ===================================================================
+// 2. ສ້າງ Interface ໃໝ່ສໍາລັບແຫຼ່ງອ້າງອີງ
+export interface SourceDoc {
+  file: string;
+  article: string;
+}
+
+// 3. ກໍານົດ Type ຂອງຂໍ້ມູນທີ່ໄດ້ຮັບ
+export interface HistoryItem {
   id: number;
   question: string;
   answer: string;
-  sources: string[];
+  sources: SourceDoc[]; // <--- ປ່ຽນຈາກ string[] ເປັນ SourceDoc[]
   created_at: string;
 }
+// ===================================================================
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲
+// ===================================================================
 
-// 3. ຕັ້ງ Type ຂອງຄຳຕອບ (ຄືກັນກັບ HistoryItem)
+// 4. ຕັ້ງ Type ຂອງຄໍາຕອບ
 type AskResponse = HistoryItem;
 
 /**
@@ -28,13 +40,12 @@ export const fetchHistory = async (): Promise<HistoryItem[]> => {
     return await response.json();
   } catch (error) {
     console.error("Failed to fetch history:", error);
-    return []; // ສົ່ງຄ່າ array ວ່າງກັບໄປຖ້າເກີດ error
+    return [];
   }
 };
 
 /**
- * ຟັງຊັນທີ 2: ສົ່ງຄຳຖາມໃໝ່
- * (ມີພຽງອັນດຽວ)
+ * ຟັງຊັນທີ 2: ສົ່ງຄໍາຖາມໃໝ່
  */
 export const askQuestion = async (question: string): Promise<AskResponse> => {
   const response = await fetch(`${API_BASE_URL}/ask`, {
@@ -55,7 +66,6 @@ export const askQuestion = async (question: string): Promise<AskResponse> => {
 
 /**
  * ຟັງຊັນທີ 3: ລຶບປະຫວັດການສົນທະນາທັງໝົດ
- * (ມີພຽງອັນດຽວ)
  */
 export const deleteHistory = async (): Promise<{ ok: boolean }> => {
   const response = await fetch(`${API_BASE_URL}/history`, {

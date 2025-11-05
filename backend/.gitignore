@@ -1,22 +1,13 @@
-# Environment variables (ສຳຄັນທີ່ສຸດ!)
-# ຫ້າມ Comment ແຖວນີ້ເດັດຂາດ
-.env
+# ໄຟລ໌ຖານຂໍ້ມູນ/Vector Store ທີ່ຖືກຂ້າມຢູ່ໃນ root ແລ້ວ
+# ແຕ່ເພີ່ມເຂົ້າອີກເພື່ອຄວາມແນ່ນອນ (best practice)
+legal_ai.db
+db_vector/
 
-# Virtual environment
-.venv/
+# Virtual Environments (ຖ້າສ້າງພາຍໃນ backend)
 venv/
-*.venv/
+.venv/
+env/
 
-# Python cache
+# ໄຟລ໌/ໂຟລເດີ Python ທີ່ຖືກສ້າງຂຶ້ນ
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Generated Databases
-db_vector/      # Vector database
-*.db            # SQLite database (ເຊັ່ນ legal_ai.db)
-*.sqlite3
-
-# IDE specific files
-.vscode/
-.idea/
+*.pyc

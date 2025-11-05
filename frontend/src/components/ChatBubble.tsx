@@ -1,4 +1,4 @@
-// ໄຟລ໌: frontend/src/components/ChatBubble.tsx (ສະບັບແກ້ໄຂ)
+// ໄຟລ໌: frontend/src/components/ChatBubble.tsx
 
 import { useState } from "react";
 import {
@@ -19,41 +19,29 @@ import {
 } from "@mui/icons-material";
 import ReactMarkdown from "react-markdown";
 
-// ===================================================================
-// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-// ===================================================================
-import { type SourceDoc } from "../utils/api"; // 1. import Type ໃໝ່
-// ===================================================================
-// ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲
-// ===================================================================
-
-interface Message {
-  id?: number | string;
-  sender: "user" | "ai";
-  text: string;
-  timestamp?: string;
-  // ===================================================================
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-  // ===================================================================
-  sources?: SourceDoc[] | null; // 2. ປ່ຽນ Type ຂອງ sources
-  // ===================================================================
-  // ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲
-  // ===================================================================
-}
+// 1. Import ໂຄງສ້າງ Message ຫຼັກ ຈາກ types.ts
+import { type Message } from "../utils/types";
 
 interface ChatBubbleProps {
-  message: Message;
+  message: Message; // ໃຊ້ Message ຈາກ types.ts
 }
 
 export default function ChatBubble({ message }: ChatBubbleProps) {
   const isUser = message.sender === "user";
   const [copied, setCopied] = useState(false);
 
+  // ຟັງຊັນສຳລັບການກັອບປີ້ຂໍ້ຄວາມ
   const handleCopy = () => {
     navigator.clipboard.writeText(message.text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 2000); // ປ່ຽນກັບເປັນປຸ່ມເດີມຫຼັງຈາກ 2 ວິນາທີ
     });
+  };
+
+  // ຟັງຊັນສຳລັບການຈັດການການກົດ Chip
+  const handleSourceClick = (sourcePath: string) => {
+    // ທ່ານສາມາດເພີ່ມການເປີດໄຟລ໌ ຫຼື link ໄດ້ໃນອະນາຄົດ
+    console.log("Clicked source:", sourcePath);
   };
 
   return (
@@ -63,92 +51,115 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
         justifyContent: isUser ? "flex-end" : "flex-start",
         mb: 3,
         gap: 2,
+        position: "relative", // ໃຊ້ສຳລັບປຸ່ມ Copy
+        "&:hover .copy-button": {
+          opacity: 1, // ສະແດງປຸ່ມ Copy ເມື່ອເມົ້າສ໌ຢູ່ເທິງ
+        },
       }}
     >
+      {/* Avatar ຂອງ AI */}
       {!isUser && (
-        <Avatar sx={{ bgcolor: "primary.main" }}>
+        <Avatar sx={{ bgcolor: "primary.main", width: 40, height: 40 }}>
           <SmartToy />
         </Avatar>
       )}
 
+      {/* ເນື້ອໃນ Bubble */}
       <Paper
         elevation={1}
         sx={{
-          position: "relative",
-          px: 2.5,
-          py: 1.5,
-          maxWidth: "80%",
+          p: 2,
           bgcolor: isUser ? "primary.main" : "background.paper",
           color: isUser ? "primary.contrastText" : "text.primary",
           borderRadius: isUser ? "20px 20px 4px 20px" : "20px 20px 20px 4px",
-          "&:hover .copy-button": {
-            opacity: 1,
+          maxWidth: "80%",
+          wordWrap: "break-word",
+          // CSS ສຳລັບການສະແດງຜົນ Markdown
+          // ‼️ ແກ້ໄຂ Bug ຂອງ ReactMarkdown ‼️
+          "& .markdown-body": {
+            "& p": { margin: 0 },
+            "& ol, & ul": {
+              paddingLeft: "20px",
+              margin: "8px 0",
+            },
+            "& li": {
+              marginBottom: "4px",
+            },
+            "& pre": {
+              backgroundColor: "rgba(0,0,0,0.05)",
+              padding: "10px",
+              borderRadius: "4px",
+              overflowX: "auto",
+            },
+            "& code": {
+              backgroundColor: "rgba(0,0,0,0.05)",
+              padding: "2px 4px",
+              borderRadius: "4px",
+            },
           },
         }}
       >
-        <Box
-          className="markdown-content"
-          sx={{
-            "& p": { margin: 0 },
-            "& ul, & ol": { pl: 2.5, my: 1 },
-          }}
-        >
-          <ReactMarkdown>{message.text}</ReactMarkdown>
-        </Box>
+        {/* ‼️ ແກ້ໄຂ Bug ຂອງ ReactMarkdown ‼️ */}
+        {/* ຫໍ່ດ້ວຍ div ເພື່ອແກ້ Error TypeScript */}
+        <div className="markdown-body">
+          <ReactMarkdown>
+            {/* ສະແດງຂໍ້ຄວາມ (ຖ້າກຳລັງໂຫຼດ ໃຫ້ສະແດງ '...') */}
+            {message.text || "..."}
+          </ReactMarkdown>
+        </div>
 
-        {/* =================================================================== */}
-        {/* ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ [ ນີ້ຄືຈຸດທີ່ແກ້ໄຂ ] ▼▼▼▼▼▼▼▼▼▼▼▼▼▼ */}
-        {/* =================================================================== */}
-        {/* 3. ປ່ຽນວິທີສະແດງຜົນ sources ໃໝ່ທັງໝົດ */}
+        {/* ‼️ 2. ການສະແດງແຫຼ່ງຂໍ້ມູນ (Rich Sources) - ສະບັບແກ້ໄຂ ‼️ */}
         {!isUser && message.sources && message.sources.length > 0 && (
           <Box sx={{ mt: 1.5 }}>
             <Typography
               variant="caption"
-              sx={{ fontWeight: "bold", color: "text.secondary" }}
+              sx={{
+                fontWeight: "bold",
+                color: isUser ? "primary.contrastText" : "text.secondary",
+              }}
             >
               ແຫຼ່ງຂໍ້ມູນ:
             </Typography>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
+              {/* 3. ວົນ Loop ຜ່ານ sources ທີ່ເປັນ object */}
               {message.sources.map((source, index) => (
                 <Chip
                   key={index}
                   icon={<Source fontSize="small" />}
-                  // ໃຊ້ Box ເພື່ອຈັດລຽງ "ມາດຕາ" ແລະ "ໄຟລ໌"
+                  size="small"
+                  variant="outlined"
+                  onClick={() => handleSourceClick(source.file)}
+                  // 4. ໃຊ້ label prop ເພື່ອສະແດງ 2 ແຖວ
                   label={
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                      }}
-                    >
+                    <Box sx={{ textAlign: "left" }}>
                       <Typography
                         variant="caption"
-                        sx={{ fontWeight: "bold", lineHeight: 1.2 }}
+                        sx={{ fontWeight: "bold", display: "block" }}
                       >
-                        {source.article}
+                        {/* ສະແດງຊື່ມາດຕາ */}
+                        {source.article || "ບໍ່ພົບຊື່ມາດຕາ"}
                       </Typography>
                       <Typography
                         variant="caption"
-                        sx={{
-                          opacity: 0.8,
-                          fontStyle: "italic",
-                          lineHeight: 1.2,
-                        }}
+                        sx={{ fontStyle: "italic", display: "block" }}
                       >
+                        {/* ສະແດງຊື່ໄຟລ໌ */}
                         {source.file}
                       </Typography>
                     </Box>
                   }
-                  size="medium" // ປ່ຽນເປັນ medium ເພື່ອໃຫ້ມີພື້ນທີ່
-                  variant="outlined"
                   sx={{
-                    height: "auto", // ໃຫ້ Chip ປັບຂະໜາດເອງ
+                    height: "auto", // ໃຫ້ Chip ປັບຂະໜາດອັດຕະໂນມັດ
                     "& .MuiChip-label": {
-                      paddingTop: "6px",
-                      paddingBottom: "6px",
-                      whiteSpace: "normal",
-                      textAlign: "left",
+                      paddingY: "4px", // ເພີ່ມຊ່ອງຫວ່າງ
+                    },
+                    // ປັບສີໃຫ້ເຂົ້າກັບ Bubble
+                    color: isUser ? "primary.contrastText" : "text.primary",
+                    borderColor: isUser
+                      ? "rgba(255,255,255,0.23)"
+                      : "rgba(0,0,0,0.23)",
+                    "& .MuiChip-icon": {
+                      color: "inherit",
                     },
                   }}
                 />
@@ -156,42 +167,44 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
             </Box>
           </Box>
         )}
-        {/* =================================================================== */}
-        {/* ▲▲▲▲▲▲▲▲▲▲▲▲▲ [ /ຈົບສ່ວນທີ່ແກ້ໄຂ ] ▲▲▲▲▲▲▲▲▲▲▲▲▲ */}
-        {/* =================================================================== */}
       </Paper>
 
+      {/* Avatar ຂອງຜູ້ໃຊ້ */}
       {isUser && (
-        <Avatar sx={{ bgcolor: "grey[700]" }}>
+        <Avatar sx={{ bgcolor: "grey.500", width: 40, height: 40 }}>
           <Person />
         </Avatar>
       )}
 
-      {!isUser && (
-        <Tooltip
-          title={copied ? "ກັອບປີ້ແລ້ວ!" : "ກັອບປີ້ຄຳຕອບ"}
-          placement="top"
-        >
-          <IconButton
-            className="copy-button"
-            onClick={handleCopy}
-            size="small"
-            sx={{
-              alignSelf: "flex-start",
-              mt: 0.5,
-              opacity: 0,
-              transition: "opacity 0.2s",
-              "&:hover": { opacity: 1 },
-            }}
+      {/* ປຸ່ມ Copy (ສະເພາະ AI) */}
+      {!isUser &&
+        message.text && ( // ສະແດງປຸ່ມ Copy ຕໍ່ເມື່ອມີຂໍ້ຄວາມ
+          <Tooltip
+            title={copied ? "ກັອບປີ້ແລ້ວ!" : "ກັອບປີ້ຄຳຕອບ"}
+            placement="top"
           >
-            {copied ? (
-              <Check fontSize="small" />
-            ) : (
-              <ContentCopy fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
-      )}
+            <IconButton
+              className="copy-button"
+              onClick={handleCopy}
+              size="small"
+              sx={{
+                position: "absolute",
+                bottom: 0,
+                right: isUser ? "unset" : 48, // ວາງປຸ່ມໄວ້ຂ້າງ Avatar
+                left: isUser ? 48 : "unset",
+                opacity: 0, // ປົກກະຕິຈະເຊື່ອງໄວ້
+                transition: "opacity 0.2s",
+                color: "text.secondary",
+              }}
+            >
+              {copied ? (
+                <Check fontSize="small" />
+              ) : (
+                <ContentCopy fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        )}
     </Box>
   );
 }

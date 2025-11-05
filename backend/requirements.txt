@@ -11,6 +11,8 @@ langchain-community
 langchain_core
 sentence-transformers
 chromadb
+langchain_chroma
+langchain_huggingface
 
 pypdf
 python-docx

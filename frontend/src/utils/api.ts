@@ -4,7 +4,7 @@
 import {
   type QAHistory,
   type SourceDocument,
-  type ChatHistoryMessage, // ໃຊ້ ChatHistoryMessage ທີ່ຖືກຕ້ອງ
+  type ChatHistoryMessage,
 } from "./types";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -20,7 +20,7 @@ export async function fetchHistory(): Promise<QAHistory[]> {
     // ຮັບປະກັນວ່າ timestamp ມີຢູ່ (ສຳຄັນ)
     return data.map((item) => ({
       ...item,
-      timestamp: item.timestamp || new Date().toISOString(), // ‼️ ຮັບປະກັນ timestamp ‼️
+      timestamp: item.timestamp || new Date().toISOString(), // ຮັບປະກັນ timestamp
     }));
   } catch (err: unknown) {
     console.error("Failed to fetch history:", err);
@@ -44,11 +44,10 @@ export async function deleteHistory(): Promise<void> {
 }
 
 // --- 3. ຟັງຊັນຫຼັກ: ຖາມຄຳຖາມແບບ Stream ---
-// ‼️ ແກ້ໄຂ: ຮັບ 3 arguments ‼️
 export async function streamAskQuestion(
   question: string,
-  history: ChatHistoryMessage[], // ຮັບ Chat Memory ທີ່ຖືກຕ້ອງ
-  signal: AbortSignal // ຮັບ Abort Signal
+  history: ChatHistoryMessage[],
+  signal: AbortSignal
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   try {
     const response = await fetch(`${API_BASE_URL}/stream-ask`, {
@@ -56,16 +55,39 @@ export async function streamAskQuestion(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ question, history }), // ສົ່ງທັງຄຳຖາມ ແລະ ປະຫວັດ
-      signal, // ສົ່ງ signal ໄປ
+      body: JSON.stringify({ question, history }),
+      signal,
     });
 
+    // --- ‼️ ວິທີແກ້ໄຂ Error [object Object] ‼️ ---
     if (!response.ok) {
-      const errorBody = await response.json();
-      throw new Error(
-        `Backend Error: ${errorBody.detail || response.statusText}`
-      );
+      let errorDetail = response.statusText; // ຕັ້ງຄ່າເລີ່ມຕົ້ນ
+
+      try {
+        // ພະຍາຍາມອ່ານ Error ທີ່ເປັນ JSON
+        const errorBody = await response.json();
+
+        if (errorBody.detail) {
+          // ກວດສອບວ່າ 'detail' ເປັນ Array (Pydantic Validation Error)
+          if (Array.isArray(errorBody.detail)) {
+            // ສະກັດຂໍ້ຄວາມທຳອິດອອກມາ
+            errorDetail = errorBody.detail
+              .map((err: any) => err.msg || JSON.stringify(err))
+              .join(", ");
+          } else {
+            // ຖ້າເປັນ Object ຫຼື String ທຳມະດາ (Standard HTTPException)
+            errorDetail = errorBody.detail;
+          }
+        }
+      } catch (e) {
+        // ຖ້າ Response ບໍ່ແມ່ນ JSON (ເຊັ່ນ 500 Server Error)
+        console.warn("Could not parse error JSON, using statusText.");
+      }
+
+      // ໂຍນ Error ທີ່ອ່ານເຂົ້າໃຈໄດ້
+      throw new Error(`Backend Error: ${errorDetail}`);
     }
+    // --- ‼️ ສິ້ນສຸດການແກ້ໄຂ ‼️ ---
 
     if (!response.body) {
       throw new Error("No response body from server.");
@@ -75,9 +97,10 @@ export async function streamAskQuestion(
   } catch (err: unknown) {
     if ((err as Error).name === "AbortError") {
       console.log("Fetch aborted by user.");
-      throw new Error("ການເຊື່ອມຕໍ່ຖືກຍົກເລີກ."); // ໂຍນ Error ໃຫ້ ChatPage ຈັດການ
+      throw new Error("ການເຊື່ອມຕໍ່ຖືກຍົກເລີກ.");
     }
     console.error("Failed to stream answer:", err);
+    // ໂຍນ Error ໄປໃຫ້ ChatPage.tsx ສະແດງຜົນ
     throw new Error(`ການເຊື່ອມຕໍ່ລົ້ມເຫຼວ: ${(err as Error).message}`);
   }
 }
@@ -96,9 +119,7 @@ export async function saveChatToDB(
       },
       body: JSON.stringify({ question, answer, sources }),
     });
-    // ບໍ່ຈຳເປັນຕ້ອງລໍຖ້າ response ຖ້າບໍ່ໄດ້ໃຊ້ມັນ
   } catch (err: unknown) {
-    // ບໍ່ຕ້ອງ throw Error, ແຕ່ໃຫ້ Log ໄວ້
     console.error("Failed to save chat to DB:", err);
   }
 }

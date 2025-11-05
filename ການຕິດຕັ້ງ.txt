@@ -11,7 +11,7 @@ cd path/to/your/project/backend
 
 Bash
 
-python -m venv venv
+python -m venv .venv
 ເປີດໃຊ້ງານ Virtual Environment:
 
 Windows: .venv\Scripts\activate
